@@ -1,103 +1,296 @@
-import Image from "next/image";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+"use client"
+import { useState, useEffect } from 'react';
+import axios from 'axios';
+import Head from 'next/head';
+
+const API_BASE_URL = 'http://localhost:8000'; 
+
+interface Product {
+  id: string;
+  name: string;
+  price: number;
+}
+
+interface Discount {
+  type: string;
+  value?: number;
+}
+
+interface DiscountResult {
+  product: Product;
+  quantity: number;
+  original_price: number;
+  discounted_price: number;
+  savings: number;
+  applied_discounts: any[];
+}
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  // State hooks
+  const [products, setProducts] = useState<Product[]>([]);
+  const [newProduct, setNewProduct] = useState({ name: '', price: '' });
+  const [selectedProduct, setSelectedProduct] = useState<string>('');
+  const [quantity, setQuantity] = useState<number>(1);
+  const [discounts, setDiscounts] = useState<Discount[]>([]);
+  const [result, setResult] = useState<DiscountResult | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  // Fetch products on component mount
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const fetchProducts = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/products/`);
+      setProducts(response.data);
+    } catch (err) {
+      setError('Failed to fetch products');
+      console.error(err);
+    }
+  };
+
+  const handleCreateProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    
+    if (!newProduct.name || !newProduct.price) {
+      setError('Product name and price are required');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await axios.post(`${API_BASE_URL}/products/`, {
+        name: newProduct.name,
+        price: parseFloat(newProduct.price)
+      });
+      setNewProduct({ name: '', price: '' });
+      fetchProducts();
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to create product');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addDiscount = (type: string) => {
+    const newDiscount: Discount = { type };
+    
+    if (type === 'percentage' || type === 'flat') {
+      const value = prompt(`Enter ${type === 'percentage' ? 'percentage' : 'amount'} value:`);
+      if (value === null) return;
+      const numValue = parseFloat(value);
+      if (isNaN(numValue) || numValue <= 0) {
+        alert('Please enter a valid positive number');
+        return;
+      }
+      newDiscount.value = numValue;
+    }
+    
+    setDiscounts([...discounts, newDiscount]);
+  };
+
+  const removeDiscount = (index: number) => {
+    const newDiscounts = [...discounts];
+    newDiscounts.splice(index, 1);
+    setDiscounts(newDiscounts);
+  };
+
+  const calculateDiscount = async () => {
+    if (!selectedProduct) {
+      setError('Please select a product');
+      return;
+    }
+
+    if (discounts.length === 0) {
+      setError('Please add at least one discount');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError('');
+      
+      const response = await axios.post(`${API_BASE_URL}/calculate-discount/`, {
+        product_id: selectedProduct,
+        quantity,
+        discounts: discounts
+      });
+      
+      setResult(response.data);
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to calculate discount');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-100 py-6">
+      <Head>
+        <title>Discount Calculator</title>
+        <meta name="description" content="Product Discount Calculator" />
+      </Head>
+
+      <div className="max-w-4xl mx-auto px-4">
+        <h1 className="text-3xl font-bold text-center mb-8">Discount Calculator</h1>
+
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            {error}
+          </div>
+        )}
+
+        <div className="bg-white shadow-md rounded-lg p-6 mb-6">
+          <h2 className="text-xl font-semibold mb-4">Create Product</h2>
+          <form onSubmit={handleCreateProduct} className="flex flex-col gap-4">
+            <div>
+              <label className="block text-gray-700 mb-1">Product Name</label>
+              <input
+                type="text"
+                value={newProduct.name}
+                onChange={(e) => setNewProduct({...newProduct, name: e.target.value})}
+                className="w-full p-2 border rounded"
+                placeholder="Product name"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-1">Price</label>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={newProduct.price}
+                onChange={(e) => setNewProduct({...newProduct, price: e.target.value})}
+                className="w-full p-2 border rounded"
+                placeholder="Product price"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 disabled:bg-blue-300"
+            >
+              {loading ? 'Creating...' : 'Create Product'}
+            </button>
+          </form>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+        <div className="bg-white shadow-md rounded-lg p-6 mb-6">
+          <h2 className="text-xl font-semibold mb-4">Calculate Discount</h2>
+          
+          <div className="mb-4">
+            <label className="block text-gray-700 mb-1">Select Product</label>
+            <select
+              value={selectedProduct}
+              onChange={(e) => setSelectedProduct(e.target.value)}
+              className="w-full p-2 border rounded"
+            >
+              <option value="">-- Select a product --</option>
+              {products.map((product) => (
+                <option key={product.id} value={product.id}>
+                  {product.name} - ${product.price.toFixed(2)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-gray-700 mb-1">Quantity</label>
+            <input
+              type="number"
+              min="1"
+              value={quantity}
+              onChange={(e) => setQuantity(parseInt(e.target.value))}
+              className="w-full p-2 border rounded"
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-gray-700 mb-2">Discounts</label>
+            
+            <div className="flex flex-wrap gap-2 mb-3">
+              <button 
+                onClick={() => addDiscount('percentage')}
+                className="bg-green-500 text-white py-1 px-3 rounded text-sm hover:bg-green-600"
+              >
+                Add Percentage
+              </button>
+              <button 
+                onClick={() => addDiscount('flat')}
+                className="bg-purple-500 text-white py-1 px-3 rounded text-sm hover:bg-purple-600"
+              >
+                Add Flat
+              </button>
+              <button 
+                onClick={() => addDiscount('bogo')}
+                className="bg-orange-500 text-white py-1 px-3 rounded text-sm hover:bg-orange-600"
+              >
+                Add BOGO
+              </button>
+            </div>
+
+            {discounts.length > 0 ? (
+              <div className="space-y-2 mb-4">
+                {discounts.map((discount, index) => (
+                  <div key={index} className="flex items-center justify-between bg-gray-100 p-2 rounded">
+                    <span>
+                      {discount.type === 'percentage' && `${discount.value}% off`}
+                      {discount.type === 'flat' && `$${discount.value} off`}
+                      {discount.type === 'bogo' && 'Buy One Get One Free'}
+                    </span>
+                    <button 
+                      onClick={() => removeDiscount(index)}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500 mb-4">No discounts added yet</p>
+            )}
+
+            <button
+              onClick={calculateDiscount}
+              disabled={loading || !selectedProduct || discounts.length === 0}
+              className="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 disabled:bg-blue-300 w-full"
+            >
+              {loading ? 'Calculating...' : 'Calculate Final Price'}
+            </button>
+          </div>
+        </div>
+
+        {result && (
+          <div className="bg-white shadow-md rounded-lg p-6">
+            <h2 className="text-xl font-semibold mb-4">Result</h2>
+            <div className="space-y-2">
+              <p><strong>Product:</strong> {result.product.name}</p>
+              <p><strong>Quantity:</strong> {result.quantity}</p>
+              <p><strong>Original Price:</strong> ${result.original_price.toFixed(2)}</p>
+              <p><strong>Discounted Price:</strong> ${result.discounted_price.toFixed(2)}</p>
+              <p><strong>Total Savings:</strong> ${result.savings.toFixed(2)} ({(result.savings / result.original_price * 100).toFixed(2)}%)</p>
+              
+              <div className="mt-4">
+                <h3 className="font-medium">Applied Discounts:</h3>
+                <ul className="list-disc pl-5 mt-2">
+                  {result.applied_discounts.map((discount, index) => (
+                    <li key={index}>
+                      {discount.type === 'percentage' && `${discount.params.value}% off - Saved $${discount.saved.toFixed(2)}`}
+                      {discount.type === 'flat' && `$${discount.params.value} off - Saved $${discount.saved.toFixed(2)}`}
+                      {discount.type === 'bogo' && `Buy One Get One Free - Saved $${discount.saved.toFixed(2)}`}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
