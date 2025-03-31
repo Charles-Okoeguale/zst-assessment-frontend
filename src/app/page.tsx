@@ -11,6 +11,7 @@ export default function Home() {
   const [products, setProducts] = useState<Product[]>([]);
   const [result, setResult] = useState<DiscountResult | null>(null);
   const { loading, error, fetchProducts, createProduct, calculateDiscount } = useProductApi();
+  const [shouldReset, setShouldReset] = useState(false);
 
   useEffect(() => {
     loadProducts();
@@ -32,6 +33,7 @@ export default function Home() {
     const result = await calculateDiscount(productId, quantity, discounts);
     if (result) {
       setResult(result);
+      setShouldReset(true); 
     }
   };
 
@@ -56,6 +58,8 @@ export default function Home() {
           onCalculate={handleCalculateDiscount}
           loading={loading}
           result={result}
+          shouldReset={shouldReset}
+          setShouldReset={setShouldReset}
         />
       </div>
     </div>

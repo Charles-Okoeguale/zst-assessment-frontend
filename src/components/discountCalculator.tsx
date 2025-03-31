@@ -1,4 +1,6 @@
-import { useState } from 'react';
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { useEffect, useState } from 'react';
 import { Product, Discount, DiscountResult } from '@/types';
 
 interface DiscountCalculatorProps {
@@ -6,13 +8,17 @@ interface DiscountCalculatorProps {
   onCalculate: (productId: string, quantity: number, discounts: Discount[]) => Promise<void>;
   loading: boolean;
   result: DiscountResult | null;
+  shouldReset?: boolean;
+  setShouldReset: (value: boolean) => void;
 }
 
 export const DiscountCalculator = ({ 
   products, 
   onCalculate, 
   loading,
-  result 
+  result,
+  shouldReset,
+  setShouldReset
 }: DiscountCalculatorProps) => {
   const [selectedProduct, setSelectedProduct] = useState<string>('');
   const [quantity, setQuantity] = useState<number>(1);
@@ -45,6 +51,15 @@ export const DiscountCalculator = ({
     if (!selectedProduct || discounts.length === 0) return;
     onCalculate(selectedProduct, quantity, discounts);
   };
+
+  useEffect(() => {
+    if (shouldReset) {
+      setSelectedProduct('');
+      setQuantity(1);
+      setDiscounts([]);
+      setShouldReset(false);
+    }
+  }, [shouldReset]);
 
   return (
     <>
