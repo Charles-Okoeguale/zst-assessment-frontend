@@ -1,33 +1,12 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client"
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import Head from 'next/head';
+import { Discount, DiscountResult, Product } from '@/types';
 
-const API_BASE_URL = 'http://localhost:8000'; 
-
-interface Product {
-  id: string;
-  name: string;
-  price: number;
-}
-
-interface Discount {
-  type: string;
-  value?: number;
-}
-
-interface DiscountResult {
-  product: Product;
-  quantity: number;
-  original_price: number;
-  discounted_price: number;
-  savings: number;
-  applied_discounts: any[];
-}
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 export default function Home() {
-  // State hooks
   const [products, setProducts] = useState<Product[]>([]);
   const [newProduct, setNewProduct] = useState({ name: '', price: '' });
   const [selectedProduct, setSelectedProduct] = useState<string>('');
@@ -60,7 +39,7 @@ export default function Home() {
       setError('Product name and price are required');
       return;
     }
-
+  
     try {
       setLoading(true);
       await axios.post(`${API_BASE_URL}/products/`, {
@@ -69,12 +48,17 @@ export default function Home() {
       });
       setNewProduct({ name: '', price: '' });
       fetchProducts();
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to create product');
+    } catch (err) {
+      if (err instanceof AxiosError) {
+        setError(err.response?.data?.detail || 'Failed to create product');
+      } else {
+        setError('Failed to create product');
+      }
     } finally {
       setLoading(false);
     }
   };
+  
 
   const addDiscount = (type: string) => {
     const newDiscount: Discount = { type };
@@ -104,12 +88,12 @@ export default function Home() {
       setError('Please select a product');
       return;
     }
-
+  
     if (discounts.length === 0) {
       setError('Please add at least one discount');
       return;
     }
-
+  
     try {
       setLoading(true);
       setError('');
@@ -121,8 +105,12 @@ export default function Home() {
       });
       
       setResult(response.data);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to calculate discount');
+    } catch (err) {
+      if (err instanceof AxiosError) {
+        setError(err.response?.data?.detail || 'Failed to calculate discount');
+      } else {
+        setError('Failed to calculate discount');
+      }
     } finally {
       setLoading(false);
     }
